@@ -77,6 +77,17 @@ class ServicoRepository {
   }
 
   /**
+   * Verifica se um serviço tem agendamentos associados
+   * @param {string} id - ID do serviço
+   * @returns {Promise<number>} Quantidade de agendamentos
+   */
+  async contarAgendamentos(id) {
+    return await prisma.agendamento.count({
+      where: { servicoId: id },
+    });
+  }
+
+  /**
    * Remove um serviço permanentemente
    * @param {string} id - ID do serviço
    * @returns {Promise<Object>} Serviço removido

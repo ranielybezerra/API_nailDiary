@@ -1,5 +1,6 @@
 const agendamentoRepository = require('../repositories/agendamento.repository');
 const servicoRepository = require('../repositories/servico.repository');
+const configuracaoService = require('./configuracao.service');
 
 class AgendamentoService {
   /**
@@ -52,7 +53,19 @@ class AgendamentoService {
       servico.duracao
     );
 
-    return await agendamentoRepository.create(agendamentoData);
+    // Gerar token e PIN únicos para verificação
+    const { gerarToken, gerarPIN } = require('../utils/verificacao.util');
+    const tokenVerificacao = gerarToken();
+    const pinVerificacao = gerarPIN();
+
+    // Adicionar token e PIN aos dados do agendamento
+    const dadosComVerificacao = {
+      ...agendamentoData,
+      tokenVerificacao,
+      pinVerificacao,
+    };
+
+    return await agendamentoRepository.create(dadosComVerificacao);
   }
 
   /**
@@ -121,6 +134,30 @@ class AgendamentoService {
   }
 
   /**
+   * Atualiza o status de um agendamento
+   * @param {string} id - ID do agendamento
+   * @param {string} status - Novo status (PENDENTE, CONFIRMADO, CANCELADO, CONCLUIDO)
+   * @returns {Promise<Object>} Agendamento atualizado
+   */
+  async atualizarStatusAgendamento(id, status) {
+    // Verificar se o agendamento existe
+    await this.obterAgendamento(id);
+
+    // Validar status
+    const statusValidos = ['PENDENTE', 'CONFIRMADO', 'CANCELADO', 'CONCLUIDO'];
+    if (!statusValidos.includes(status)) {
+      throw new Error(`Status inválido. Deve ser um dos: ${statusValidos.join(', ')}`);
+    }
+
+    // Se o status for CONCLUIDO, arquivar automaticamente
+    if (status === 'CONCLUIDO') {
+      return await agendamentoRepository.updateStatusEArquivar(id, status);
+    }
+
+    return await agendamentoRepository.updateStatus(id, status);
+  }
+
+  /**
    * Verifica disponibilidade de horário
    * @param {Date|string} dataHora - Data e hora do agendamento
    * @param {number} duracao - Duração em minutos
@@ -142,19 +179,26 @@ class AgendamentoService {
       throw new Error('Não é possível agendar para uma data no passado');
     }
 
-    // Verificar se não é domingo (0) ou segunda (1)
+    // Obter configurações de disponibilidade
+    const config = await configuracaoService.obterConfiguracaoDisponibilidade();
+    
+    // Verificar se o dia da semana está disponível
     const diaSemana = data.getDay();
-    if (diaSemana === 0 || diaSemana === 1) {
-      throw new Error('Não é possível agendar aos domingos e segundas-feiras');
+    if (!config.diasDisponiveis.includes(diaSemana)) {
+      const nomesDias = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+      const diasDisponiveisNomes = config.diasDisponiveis.map(d => nomesDias[d]).join(', ');
+      throw new Error(`Não é possível agendar neste dia. Dias disponíveis: ${diasDisponiveisNomes}`);
     }
 
-    // Verificar horário de funcionamento (8h às 18h)
+    // Verificar horário de funcionamento
     const hora = data.getHours();
-    if (hora < 8 || hora >= 18) {
-      throw new Error('Horário de funcionamento: 8h às 18h');
+    if (hora < config.horarioInicio || hora >= config.horarioFim) {
+      throw new Error(`Horário de funcionamento: ${config.horarioInicio}h às ${config.horarioFim}h`);
     }
 
     // Verificar conflitos com outros agendamentos
+    // Como é um único trabalhador, qualquer agendamento conflita com outro
+    // independente do serviço - o que importa é o horário
     const conflitos = await agendamentoRepository.verificarConflitos(
       data,
       duracao,
@@ -162,7 +206,7 @@ class AgendamentoService {
     );
 
     if (conflitos.length > 0) {
-      throw new Error('Horário não disponível. Já existe um agendamento neste período');
+      throw new Error('Horário não disponível. Já existe um agendamento neste horário');
     }
   }
 
@@ -193,6 +237,45 @@ class AgendamentoService {
   }
 
   /**
+   * Busca horários ocupados em uma data
+   * @param {Date|string} data - Data para verificar
+   * @returns {Promise<Array>} Array de horários ocupados
+   */
+  async buscarHorariosOcupados(data) {
+    return await agendamentoRepository.buscarHorariosOcupados(data);
+  }
+
+  /**
+   * Busca agendamento por token de verificação
+   * @param {string} token - Token de verificação
+   * @returns {Promise<Object>} Agendamento encontrado
+   */
+  async verificarPorToken(token) {
+    const agendamento = await agendamentoRepository.findByToken(token);
+    
+    if (!agendamento) {
+      throw new Error('Agendamento não encontrado com este token');
+    }
+    
+    return agendamento;
+  }
+
+  /**
+   * Busca agendamento por PIN de verificação
+   * @param {string} pin - PIN de verificação
+   * @returns {Promise<Object>} Agendamento encontrado
+   */
+  async verificarPorPIN(pin) {
+    const agendamento = await agendamentoRepository.findByPIN(pin);
+    
+    if (!agendamento) {
+      throw new Error('Agendamento não encontrado com este PIN');
+    }
+    
+    return agendamento;
+  }
+
+  /**
    * Valida formato de email
    * @param {string} email - Email para validar
    * @returns {boolean} True se o email é válido
@@ -200,6 +283,55 @@ class AgendamentoService {
   validarEmail(email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return emailRegex.test(email);
+  }
+
+  /**
+   * Obtém estatísticas de agendamentos
+   * @param {Object} filters - Filtros de data (dataInicio, dataFim)
+   * @returns {Promise<Object>} Estatísticas agregadas
+   */
+  async obterEstatisticas(filters = {}) {
+    return await agendamentoRepository.obterEstatisticas(filters);
+  }
+
+  /**
+   * Lista agendamentos arquivados
+   * @param {Object} filters - Filtros opcionais
+   * @returns {Promise<Array>} Lista de agendamentos arquivados
+   */
+  async listarArquivados(filters = {}) {
+    return await agendamentoRepository.findArquivados(filters);
+  }
+
+  /**
+   * Desarquiva um agendamento
+   * @param {string} id - ID do agendamento
+   * @returns {Promise<Object>} Agendamento desarquivado
+   */
+  async desarquivar(id) {
+    const agendamento = await this.obterAgendamento(id);
+    
+    if (!agendamento.arquivado) {
+      throw new Error('Agendamento não está arquivado');
+    }
+
+    return await agendamentoRepository.desarquivar(id);
+  }
+
+  /**
+   * Exclui um agendamento permanentemente
+   * @param {string} id - ID do agendamento
+   * @returns {Promise<void>}
+   */
+  async excluirAgendamento(id) {
+    const agendamento = await this.obterAgendamento(id);
+    
+    // Apenas agendamentos cancelados podem ser excluídos
+    if (agendamento.status !== 'CANCELADO') {
+      throw new Error('Apenas agendamentos cancelados podem ser excluídos');
+    }
+
+    return await agendamentoRepository.delete(id);
   }
 }
 

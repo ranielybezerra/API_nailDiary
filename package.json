@@ -9,7 +9,9 @@
     "db:generate": "prisma generate",
     "db:push": "prisma db push",
     "db:seed": "node prisma/seed.js",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:test": "node scripts/test-db-connection.js",
+    "db:create": "node scripts/create-database.js"
   },
   "keywords": ["express", "prisma", "postgresql", "jwt", "api"],
   "author": "",

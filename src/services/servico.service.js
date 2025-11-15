@@ -104,6 +104,17 @@ class ServicoService {
    */
   async excluirServico(id) {
     await this.obterServico(id);
+    
+    // Verificar se há agendamentos associados
+    const quantidadeAgendamentos = await servicoRepository.contarAgendamentos(id);
+    
+    if (quantidadeAgendamentos > 0) {
+      throw new Error(
+        `Não é possível excluir este serviço pois ele possui ${quantidadeAgendamentos} agendamento(s) associado(s). ` +
+        `Use a opção de inativar serviço em vez de excluir.`
+      );
+    }
+    
     return await servicoRepository.delete(id);
   }
 
@@ -127,6 +138,10 @@ class ServicoService {
 }
 
 module.exports = new ServicoService();
+
+
+
+
 
 
 

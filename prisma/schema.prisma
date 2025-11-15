@@ -2,7 +2,8 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -46,6 +47,10 @@ model Agendamento {
   dataHora        DateTime
   status          StatusAgendamento @default(PENDENTE)
   observacoes     String?
+  tokenVerificacao String? @unique // Token único para acesso via link
+  pinVerificacao  String?          // PIN de 4 dígitos para verificação
+  arquivado       Boolean           @default(false) // Indica se o agendamento foi arquivado
+  dataArquivamento DateTime?        // Data em que foi arquivado
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
 
@@ -64,6 +69,17 @@ model Dica {
   updatedAt     DateTime @updatedAt
 
   @@map("dicas")
+}
+
+model Configuracao {
+  id            String   @id @default(cuid())
+  chave         String   @unique
+  valor         String   // JSON string para valores complexos
+  descricao     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("configuracoes")
 }
 
 enum Role {

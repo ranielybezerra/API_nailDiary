@@ -111,13 +111,25 @@ class ServicoController {
       
       return successResponse(res, null, 'Serviço excluído com sucesso');
     } catch (error) {
-      const statusCode = error.message.includes('não encontrado') ? 404 : 500;
+      let statusCode = 500;
+      
+      if (error.message.includes('não encontrado')) {
+        statusCode = 404;
+      } else if (error.message.includes('agendamento')) {
+        // Erro de agendamentos associados
+        statusCode = 409; // Conflict
+      }
+      
       return errorResponse(res, error.message, 'DELETE_ERROR', statusCode);
     }
   }
 }
 
 module.exports = new ServicoController();
+
+
+
+
 
 
 

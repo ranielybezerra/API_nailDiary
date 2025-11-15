@@ -75,14 +75,26 @@ const validarCriarAgendamento = [
     .normalizeEmail(),
   body('clienteTelefone')
     .trim()
-    .isLength({ min: 10, max: 15 })
-    .withMessage('Telefone deve ter entre 10 e 15 caracteres'),
+    .notEmpty()
+    .withMessage('Telefone é obrigatório')
+    .custom((value) => {
+      // Remover caracteres não numéricos para validar
+      const numeros = value.replace(/\D/g, '');
+      if (numeros.length < 10 || numeros.length > 15) {
+        throw new Error('Telefone deve ter entre 10 e 15 dígitos numéricos');
+      }
+      return true;
+    }),
   body('dataHora')
     .isISO8601()
     .withMessage('Data e hora devem estar no formato ISO 8601'),
   body('servicoId')
-    .isLength({ min: 20, max: 30 })
-    .withMessage('ID do serviço deve ser um ID válido'),
+    .notEmpty()
+    .withMessage('ID do serviço é obrigatório')
+    .isString()
+    .withMessage('ID do serviço deve ser uma string')
+    .isLength({ min: 1 })
+    .withMessage('ID do serviço é obrigatório'),
   body('observacoes')
     .optional()
     .trim()
@@ -121,14 +133,34 @@ const validarUUID = (paramName) => [
  */
 const validarBusca = [
   query('titulo')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .trim()
     .isLength({ min: 2, max: 100 })
     .withMessage('Título de busca deve ter entre 2 e 100 caracteres'),
   query('status')
-    .optional()
+    .optional({ nullable: true, checkFalsy: true })
     .isIn(['PENDENTE', 'CONFIRMADO', 'CANCELADO', 'CONCLUIDO'])
     .withMessage('Status deve ser PENDENTE, CONFIRMADO, CANCELADO ou CONCLUIDO'),
+  query('dataInicio')
+    .optional({ nullable: true, checkFalsy: true })
+    .custom((value) => {
+      if (!value || value === '') return true;
+      // Aceita formato ISO8601 ou formato YYYY-MM-DD
+      const iso8601Regex = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?)?$/;
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      return iso8601Regex.test(value) || dateRegex.test(value);
+    })
+    .withMessage('Data de início deve estar no formato ISO 8601 ou YYYY-MM-DD'),
+  query('dataFim')
+    .optional({ nullable: true, checkFalsy: true })
+    .custom((value) => {
+      if (!value || value === '') return true;
+      // Aceita formato ISO8601 ou formato YYYY-MM-DD
+      const iso8601Regex = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}:\d{2}(\.\d{3})?Z?)?$/;
+      const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+      return iso8601Regex.test(value) || dateRegex.test(value);
+    })
+    .withMessage('Data de fim deve estar no formato ISO 8601 ou YYYY-MM-DD'),
   processarValidacao,
 ];
 
