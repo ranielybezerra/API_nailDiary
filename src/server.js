@@ -8,9 +8,38 @@ const { errorHandler, notFoundHandler } = require('./middlewares/error.middlewar
 const app = express();
 
 // Middlewares globais
+// Configurar CORS para aceitar produção e previews do Vercel
+const allowedOrigins = [
+  config.cors.origin,
+  'https://front-naildiary.vercel.app',
+  /^https:\/\/front-naildiary.*\.vercel\.app$/, // Aceita todos os previews do Vercel
+];
+
 app.use(cors({
-  origin: config.cors.origin,
+  origin: function (origin, callback) {
+    // Permite requisições sem origin (ex: Postman, mobile apps)
+    if (!origin) return callback(null, true);
+    
+    // Verifica se a origin está na lista de permitidas
+    const isAllowed = allowedOrigins.some(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return origin === allowedOrigin || origin === allowedOrigin + '/';
+      }
+      if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 app.use(express.json({ limit: '10mb' }));
