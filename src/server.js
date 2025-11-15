@@ -13,20 +13,25 @@ const allowedOrigins = [
   config.cors.origin,
   'https://front-naildiary.vercel.app',
   /^https:\/\/front-naildiary.*\.vercel\.app$/, // Aceita todos os previews do Vercel
+  /^https:\/\/.*\.vercel\.app$/, // Aceita qualquer subdomínio do Vercel
 ];
 
 app.use(cors({
   origin: function (origin, callback) {
-    // Permite requisições sem origin (ex: Postman, mobile apps)
+    // Permite requisições sem origin (ex: Postman, mobile apps, curl)
     if (!origin) return callback(null, true);
+    
+    // Remove barra no final se houver
+    const normalizedOrigin = origin.replace(/\/$/, '');
     
     // Verifica se a origin está na lista de permitidas
     const isAllowed = allowedOrigins.some(allowedOrigin => {
       if (typeof allowedOrigin === 'string') {
-        return origin === allowedOrigin || origin === allowedOrigin + '/';
+        const normalizedAllowed = allowedOrigin.replace(/\/$/, '');
+        return normalizedOrigin === normalizedAllowed;
       }
       if (allowedOrigin instanceof RegExp) {
-        return allowedOrigin.test(origin);
+        return allowedOrigin.test(normalizedOrigin);
       }
       return false;
     });
@@ -34,12 +39,14 @@ app.use(cors({
     if (isAllowed) {
       callback(null, true);
     } else {
+      console.log(`CORS bloqueado para origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Type', 'Authorization'],
 }));
 
 app.use(express.json({ limit: '10mb' }));
